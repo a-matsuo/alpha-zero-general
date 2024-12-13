@@ -4,19 +4,24 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 
-from ZeroMatrixNNet import ZeroMatrixNNet
+import sys
+sys.path.append('../../')
+from utils import *
+from NeuralNet import NeuralNet
 
-class NNetWrapper:
+from .ZeroMatrixNNet import ZeroMatrixNNet
+
+class NNetWrapper(NeuralNet):
     def __init__(self, game):
         self.game = game
-        self.args = {
+        self.args = dotdict({
             'lr': 0.001,
             'dropout': 0.3,
             'num_channels': 64,
             'epochs': 10,
             'batch_size': 64,
             'cuda': torch.cuda.is_available()
-        }
+        })
 
         self.nnet = ZeroMatrixNNet(game, self.args)
         self.device = torch.device("cuda" if self.args['cuda'] else "cpu")
@@ -51,7 +56,7 @@ class NNetWrapper:
                 loss.backward()
                 self.optimizer.step()
 
-            print(f"Loss_pi: {loss_pi.item():.4f}, Loss_v: {loss_v.item():.4f}")
+                print(f"Loss_pi: {loss_pi.item():.4f}, Loss_v: {loss_v.item():.4f}")
 
     def predict(self, board):
         """

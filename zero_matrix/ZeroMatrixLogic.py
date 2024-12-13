@@ -1,7 +1,7 @@
 import numpy as np
 
 class ZeroMatrixLogic:
-    def __init__(self, N, initial_mat, coupling_map, coupling_map_mat, max_turns=50):
+    def __init__(self, N, coupling_map, coupling_map_mat, max_turns=None, initial_mat=None):
         self.N = N
         self.initial_mat = initial_mat
         self.coupling_map = coupling_map
@@ -9,12 +9,26 @@ class ZeroMatrixLogic:
         self.max_turns = max_turns
 
     def get_initial_board(self):
+        if self.initial_mat is None:
+            # Generate a random symmetric binary matrix
+            # 上三角部分をランダムな0,1で生成（対角は0）
+            upper = np.triu(np.random.randint(0, 2, size=(self.N, self.N)), k=1)
+            # 対称化
+            sym_matrix = upper + upper.T
+            self.initial_mat = sym_matrix
         board = np.zeros((self.N+1, self.N), dtype=int)
         board[:self.N, :] = self.initial_mat.copy()
-        board[self.N, 0] = 0   # turn count
+
+        # Apply mat’ = mat’ - (mat’ * coupling_map_mat)
+        mat_section = board[:self.N, :]
+        mat_section = mat_section - (mat_section * self.coupling_map_mat)
+        next_board = np.zeros((self.N+1, self.N), dtype=int)
+        next_board[:self.N, :] = mat_section
+
+        next_board[self.N, 0] = 0   # turn count
         if self.N > 1:
-            board[self.N, 1] = -1  # last action = -1 (no previous action)
-        return board
+            next_board[self.N, 1] = -1  # last action = -1 (no previous action)
+        return next_board
 
     def get_board_size(self):
         return (self.N+1, self.N)
@@ -108,7 +122,8 @@ class ZeroMatrixLogic:
 
     def get_game_ended(self, board):
         if self.is_solved(board):
-            return 1
+            turn_count = self.get_turn_count(board)
+            return 1 - (turn_count / self.max_turns)
         if self.get_turn_count(board) >= self.max_turns:
             return -1
         return 0
