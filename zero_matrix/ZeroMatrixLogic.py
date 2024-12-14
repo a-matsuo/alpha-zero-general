@@ -1,12 +1,13 @@
 import numpy as np
 
 class ZeroMatrixLogic:
-    def __init__(self, N, coupling_map, coupling_map_mat, max_turns=None, initial_mat=None):
+    def __init__(self, N, coupling_map, coupling_map_mat, max_turns=None, initial_mat=None, seed=None):
         self.N = N
         self.initial_mat = initial_mat
         self.coupling_map = coupling_map
         self.coupling_map_mat = coupling_map_mat
         self.max_turns = max_turns
+        np.random.seed(seed)
 
     def get_initial_board(self):
         if self.initial_mat is None:
@@ -27,7 +28,7 @@ class ZeroMatrixLogic:
 
         next_board[self.N, 0] = 0   # turn count
         if self.N > 1:
-            next_board[self.N, 1] = -1  # last action = -1 (no previous action)
+            next_board[self.N, 1] = 0
         return next_board
 
     def get_board_size(self):
@@ -57,28 +58,58 @@ class ZeroMatrixLogic:
         turn_count += 1
         next_board[self.N, 0] = turn_count
 
-        # Record this action as the last action
-        if self.N > 1:
-            next_board[self.N, 1] = action
+        # レイヤーで使用されたアクションを記録。もしアクションが新たに使用された場合、ビットを立てる
+        # そして、左右のビットをクリアする。
+        # print(f"action: {action}")
+        # if self.N > 1:
+        #     used_actions = next_board[self.N, 1]  # ここにused_actionsビットマスクを格納する
+        #     # 1. 現アクションを使用済みに設定
+        #     used_actions |= (1 << action)
+
+        #     # 2. 左隣のビットをクリア
+        #     if action - 1 >= 0:
+        #         used_actions &= ~(1 << (action - 1))
+
+        #     # 3. 右隣のビットをクリア
+        #     if action + 1 < self.get_action_size():
+        #         used_actions &= ~(1 << (action + 1))     
+            
+        #     next_board[self.N, 1] = used_actions       
+
+        return next_board
+
+    def simulate_action(self, board, action):
+        next_board = board.copy()
+
+        (i, j) = self.coupling_map[action]
+
+        # Swap columns i, j
+        next_board[:self.N, [i, j]] = next_board[:self.N, [j, i]]
+
+        # Swap rows i, j
+        next_board[[i, j], :] = next_board[[j, i], :]
+
+        # Apply mat’ = mat’ - (mat’ * coupling_map_mat)
+        mat_section = next_board[:self.N, :]
+        mat_section = mat_section - (mat_section * self.coupling_map_mat)
+        next_board[:self.N, :] = mat_section
 
         return next_board
 
     def get_valid_moves(self, board):
         valids = [1]*self.get_action_size()
 
-        # Check the last action taken
-        last_action = -1
-        if self.N > 1:
-            last_action = board[self.N, 1]
+        # # used_actionsは使用済みアクションが立っているビットマスクとする
+        # # 使用済みアクションはvalidsを0にする
+        # used_actions = board[self.N, 1]
+        # print(f"used_actions: {used_actions}")
+        # for i in range(self.get_action_size()):
+        #     if (used_actions & (1 << i)) != 0:
+        #         valids[i] = 0
 
         puzzle_board = board[:self.N, :]
 
         for idx, (colA, colB) in enumerate(self.coupling_map):
-            # 1. No repeating the last action
-            if idx == last_action:
-                valids[idx] = 0
-                continue
-
             # 2. Must involve rows/columns that have at least one '1'
             rowA_has_ones = puzzle_board[colA, :].any()
             rowB_has_ones = puzzle_board[colB, :].any()
@@ -112,7 +143,7 @@ class ZeroMatrixLogic:
                 old_dist = abs(r - c)
                 new_dist = abs(r_new - c_new)
                 if new_dist < old_dist:
-                    improved = True
+                    improved = True                  
                     break
 
             if not improved:
@@ -123,7 +154,8 @@ class ZeroMatrixLogic:
     def get_game_ended(self, board):
         if self.is_solved(board):
             turn_count = self.get_turn_count(board)
-            return 1 - (turn_count / self.max_turns)
+            return 1
+            # return 1 - (turn_count / self.max_turns)
         if self.get_turn_count(board) >= self.max_turns:
             return -1
         return 0

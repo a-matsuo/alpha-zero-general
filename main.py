@@ -1,35 +1,53 @@
-import numpy as np
-from zero_matrix.ZeroMatrixGame import ZeroMatrixGame
-from zero_matrix.torch.NNet import NNetWrapper as NNet
-from Coach import Coach
-from utils import dotdict
+import logging
+
+import coloredlogs
 import torch
+from Coach import Coach
+from constants import num_qubits
+from utils import dotdict
+from zero_matrix.torch.NNet import NNetWrapper as NNet
+from zero_matrix.ZeroMatrixGame import ZeroMatrixGame as Game
+
+log = logging.getLogger(__name__)
+
+
+coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 
 if __name__ == "__main__":
     # Game parameters
-    N = 6
-    coupling_map = [(i, i+1) for i in range(N-1)]
-
-    game = ZeroMatrixGame(N, coupling_map, initial_mat=None)
+    log.info('Loading %s...', Game.__name__)
+    N = num_qubits
+    coupling_map = [(i, i + 1) for i in range(N - 1)]
+    game = Game(N, coupling_map, initial_mat=None)
 
     # Training parameters
-    args = dotdict({
-        'numIters': 10,            # number of training iterations
-        'numEps': 10,              # number of self-play games per iteration
-        'maxlenOfQueue': 200000,   # memory size
-        'numMCTSSims': 25,         # number of MCTS simulations per move
-        'cpuct': 1.0,
-        'checkpoint': './checkpoint/',
-        'load_model': False,
-        'load_folder_file': ('./checkpoint','checkpoint.pth.tar'),
-        'lr': 0.001,
-        'dropout': 0.3,
-        'num_channels': 64,
-        'epochs': 10,
-        'batch_size': 64,
-        'cuda': True if torch.cuda.is_available() else False
-    })
-
+    args = dotdict(
+        {
+            "numIters": 20,  # number of training iterations
+            "numEps": 20,  # number of self-play games per iteration
+            "maxlenOfQueue": 200000,  # memory size
+            "numMCTSSims": 20,  # number of MCTS simulations per move
+            "cpuct": 1.0,
+            "checkpoint": "./checkpoint/",
+            "load_model": False,
+            "load_folder_file": ("./checkpoint", "checkpoint.pth.tar"),
+            "lr": 0.001,
+            "dropout": 0.3,
+            "num_channels": 64,
+            "epochs": 10,
+            "batch_size": 64,
+            "cuda": True if torch.cuda.is_available() else False,
+            "num_qubits": N,
+        }
+    )
+    log.info('Loading %s...', NNet.__name__)
     nnet = NNet(game)
+    log.info('Loading the Coach...')
     c = Coach(game, nnet, args)
+    log.info('Starting the learning process 🎉')
+    # save pi_losses and v_losses
+    with open('./checkpoint/pi_losses.txt', 'w') as f:
+        f.write('')
+    with open('./checkpoint/v_losses.txt', 'a') as f:
+        f.write('')
     c.learn()

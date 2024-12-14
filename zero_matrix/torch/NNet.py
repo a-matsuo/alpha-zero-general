@@ -1,7 +1,9 @@
+import logging
 import os
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
+from tqdm import tqdm
 import numpy as np
 
 import sys
@@ -10,6 +12,9 @@ from utils import *
 from NeuralNet import NeuralNet
 
 from .ZeroMatrixNNet import ZeroMatrixNNet
+
+
+log = logging.getLogger(__name__)
 
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
@@ -32,14 +37,19 @@ class NNetWrapper(NeuralNet):
         """
         examples: list of (board, pi, v)
         """
+        pi_losses = AverageMeter()
+        v_losses = AverageMeter()
+
         for epoch in range(self.args['epochs']):
-            print(f'Epoch {epoch+1}/{self.args["epochs"]}')
+            log.info(f"Epoch {epoch+1}/{self.args["epochs"]}")
+            # print(f'Epoch {epoch+1}/{self.args["epochs"]}')
             self.nnet.train()
 
             np.random.shuffle(examples)
             batch_count = int(len(examples) / self.args['batch_size'])
 
-            for i in range(batch_count):
+            t = tqdm(range(batch_count), desc="Training Net")
+            for i in t:
                 sample = examples[i*self.args['batch_size'] : (i+1)*self.args['batch_size']]
                 boards, pis, vs = list(zip(*sample))
 
@@ -55,8 +65,18 @@ class NNetWrapper(NeuralNet):
 
                 loss.backward()
                 self.optimizer.step()
+                
+                pi_losses.update(loss_pi.item(), boards.size(0))
+                v_losses.update(loss_v.item(), boards.size(0))
+                t.set_postfix(Loss_pi=pi_losses, Loss_v=v_losses)
+        
+                # save pi_losses and v_losses
+                with open('./checkpoint/pi_losses.txt', 'a') as f:
+                    f.write(str(pi_losses.avg) + '\n')
+                with open('./checkpoint/v_losses.txt', 'a') as f:
+                    f.write(str(v_losses.avg) + '\n')
 
-                print(f"Loss_pi: {loss_pi.item():.4f}, Loss_v: {loss_v.item():.4f}")
+
 
     def predict(self, board):
         """
