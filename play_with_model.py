@@ -3,7 +3,7 @@ from zero_matrix.ZeroMatrixGame import ZeroMatrixGame
 from zero_matrix.torch.NNet import NNetWrapper as NNet
 from MCTS import MCTS
 from utils import dotdict
-from constants import num_qubits
+from constants import *
 from tqdm import tqdm
 
 from qiskit import QuantumCircuit
@@ -18,6 +18,7 @@ if __name__ == "__main__":
     results = []
     
     run_random = ('random' in sys.argv)
+    run_complete = ('complete' in sys.argv)
     with_fig = ('fig' in sys.argv)
     if with_fig:
         # clear results directory
@@ -41,21 +42,27 @@ if __name__ == "__main__":
         # Check for 'random' argument
         if run_random:
             seed = random.randint(0, 10000)
+            initial_mat_type = 'random'
+        elif run_complete:
+            initial_mat_type = 'complete'
+            seed = 42
         else:
             seed = 42
 
-        game = ZeroMatrixGame(N, coupling_map, seed=seed)
+        game = ZeroMatrixGame(N, coupling_map, initial_mat_type=initial_mat_type, seed=seed)
 
         # モデル読み込み
         nnet = NNet(game)
         nnet.load_checkpoint(folder='checkpoint', filename='last.pth.tar')
+        # nnet.load_checkpoint(folder='checkpoint', filename='checkpoint_qubits6_iter10_Eps10_MCTS25_lr0.001_epochs10.pth.tar')
 
         mcts_args = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
         mcts = MCTS(game, nnet, mcts_args)
 
         board = game.getInitBoard()
         player = 1
-        # print("Initial board:\n", board[:game.N, :])
+        if num_exps == 1:
+            print("Initial board:\n", board[:game.N, :])
 
         # 最大ターン数を設定し、ループを回す
         max_turns = 10000
@@ -67,6 +74,8 @@ if __name__ == "__main__":
 
             # MCTSを用いて行動確率を求め、最も確率の高い行動を選択
             pi = mcts.getActionProb(board, temp=0)
+            if num_exps == 1:
+                print("Action probabilities:", pi)
             action = np.argmax(pi)
             actions.append(int(action))
 
@@ -74,13 +83,15 @@ if __name__ == "__main__":
             # 行動確定後にvisited_statesを更新
             puzzle_board = board[:game.N, :]
             game.visited_states.add(game.stringRepresentation(puzzle_board))
-                        
-            # print(f"Turn {t+1}, Chosen action: {action}")
-            # print("Current board:\n", board[:game.N, :])
+            
+            if num_exps == 1:
+                print(f"Turn {t+1}, Chosen action: {action}")
+                print("Current board:\n", board[:game.N, :])
 
         
         result = game.getGameEnded(board, player)
-        # print("Final board:\n", board[:game.N, :])
+        if num_exps == 1:
+            print("Final board:\n", board[:game.N, :])
         if result > 0:
             results.append(1)
             if num_exps == 1:
@@ -96,7 +107,7 @@ if __name__ == "__main__":
             results.append(0)
             if num_exps == 1:
                 print("Failed to solve within constraints.")
-            if with_fig:
+            if num_exps == 1 or with_fig:
                 qc = QuantumCircuit(N)
                 for action in actions:
                     qc.swap(action, action+1)

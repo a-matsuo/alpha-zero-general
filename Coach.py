@@ -7,6 +7,7 @@ import time
 import numpy as np
 from tqdm import tqdm
 
+from zero_matrix.CurriculumEnvironment import CurriculumEnvironment
 from MCTS import MCTS
 from utils import *
 
@@ -20,6 +21,14 @@ class Coach:
         self.args = args
         self.mcts = None
         self.trainExamplesHistory = []  # history of examples from self-play
+        self.env = CurriculumEnvironment(
+            base_N=self.game.N,
+            max_N=self.game.N,
+            base_num_ones=2,
+            max_num_ones=20,
+            difficulty_steps=self.args.numIters,
+            seed=None,
+        )
 
         # Load model if provided
         if self.args.load_model:
@@ -35,18 +44,22 @@ class Coach:
             trainExamples: a list of examples of the form (canonicalBoard, pi, v)
         """
         trainExamples = []
-        board = self.game.getInitBoard()
+        if self.args.curriculum_learning:
+            initial_mat = self.env.get_initial_state(len(self.trainExamplesHistory) + 1)
+            board = self.game.getInitBoard(initial_mat)
+        else:
+            board = self.game.getInitBoard()
         player = 1
         episodeStep = 0
-        self.game.initVisitedStates()
+
+        self.mcts = MCTS(self.game, self.nnet, self.args)
 
         while True:
             episodeStep += 1
             canonicalBoard = self.game.getCanonicalForm(board, player)
-            valids = self.game.getValidMoves(canonicalBoard, 1)
+            temp = int(episodeStep < self.args.tempThreshold)
 
-            self.mcts = MCTS(self.game, self.nnet, self.args)
-            pi = self.mcts.getActionProb(canonicalBoard, temp=1)
+            pi = self.mcts.getActionProb(canonicalBoard, temp=temp)
             action = np.random.choice(len(pi), p=pi)
             trainExamples.append([canonicalBoard, pi, None])
 

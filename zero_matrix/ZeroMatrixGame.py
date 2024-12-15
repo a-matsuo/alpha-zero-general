@@ -5,20 +5,21 @@ from Game import Game
 from .ZeroMatrixLogic import ZeroMatrixLogic
 
 class ZeroMatrixGame(Game):
-    def __init__(self, N, coupling_map, max_turns=None, initial_mat=None, seed=None):
+    def __init__(self, N, coupling_map, max_turns=None, initial_mat_type=None, seed=None):
         if max_turns is None:
             max_turns = (N-2) * N/2
         coupling_map_mat = np.zeros((N, N))
         for (i, j) in coupling_map:
             coupling_map_mat[i, j] = 1
         coupling_map_mat = coupling_map_mat + coupling_map_mat.T
-        self.logic = ZeroMatrixLogic(N, coupling_map, coupling_map_mat, max_turns, initial_mat, seed)
+        self.logic = ZeroMatrixLogic(N, coupling_map, coupling_map_mat, max_turns, initial_mat_type, seed)
         self.N = N
         self.coupling_map = coupling_map
-        self.initVisitedStates()  # 訪問済み状態を記録するセット
+        self.visited_states = set()
 
-    def getInitBoard(self):
-        board = self.logic.get_initial_board()
+    def getInitBoard(self, initial_mat=None):
+        board = self.logic.get_initial_board(initial_mat)
+        self.initVisitedStates()
         puzzle_board = board[:self.N, :]
         self.visited_states.add(self.stringRepresentation(puzzle_board))
         return board
@@ -45,8 +46,8 @@ class ZeroMatrixGame(Game):
 
                 # もし既に訪問済みなら、無効化
                 if next_state_str in self.visited_states:
+                    # print(f"Invalid action: {idx}")
                     valids[idx] = 0
-
         return valids
 
     def getGameEnded(self, board, player):

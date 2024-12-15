@@ -3,7 +3,7 @@ import logging
 import coloredlogs
 import torch
 from Coach import Coach
-from constants import num_qubits
+from constants import *
 from utils import dotdict
 from zero_matrix.torch.NNet import NNetWrapper as NNet
 from zero_matrix.ZeroMatrixGame import ZeroMatrixGame as Game
@@ -15,18 +15,18 @@ coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 
 if __name__ == "__main__":
     # Game parameters
-    log.info('Loading %s...', Game.__name__)
+    log.info("Loading %s...", Game.__name__)
     N = num_qubits
     coupling_map = [(i, i + 1) for i in range(N - 1)]
-    game = Game(N, coupling_map, initial_mat=None)
+    game = Game(N, coupling_map, initial_mat_type=initial_mat_type)
 
     # Training parameters
     args = dotdict(
         {
-            "numIters": 20,  # number of training iterations
-            "numEps": 20,  # number of self-play games per iteration
+            "numIters": 50,  # number of training iterations
+            "numEps": 50,  # number of self-play games per iteration
             "maxlenOfQueue": 200000,  # memory size
-            "numMCTSSims": 20,  # number of MCTS simulations per move
+            "numMCTSSims": 100,  # number of MCTS simulations per move
             "cpuct": 1.0,
             "checkpoint": "./checkpoint/",
             "load_model": False,
@@ -38,16 +38,18 @@ if __name__ == "__main__":
             "batch_size": 64,
             "cuda": True if torch.cuda.is_available() else False,
             "num_qubits": N,
+            "tempThreshold": tempThreshold,
+            "curriculum_learning": True,
         }
     )
-    log.info('Loading %s...', NNet.__name__)
+    log.info("Loading %s...", NNet.__name__)
     nnet = NNet(game)
-    log.info('Loading the Coach...')
+    log.info("Loading the Coach...")
     c = Coach(game, nnet, args)
-    log.info('Starting the learning process 🎉')
+    log.info("Starting the learning process 🎉")
     # save pi_losses and v_losses
-    with open('./checkpoint/pi_losses.txt', 'w') as f:
-        f.write('')
-    with open('./checkpoint/v_losses.txt', 'a') as f:
-        f.write('')
+    with open("./checkpoint/pi_losses.txt", "w") as f:
+        f.write("")
+    with open("./checkpoint/v_losses.txt", "a") as f:
+        f.write("")
     c.learn()

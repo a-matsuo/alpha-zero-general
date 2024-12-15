@@ -6,8 +6,8 @@
 /.pydevproject
 
 # checkpoint
-checkpoints/
+results/
+checkpoint/
 
 # For PyCharm users
 .idea/
-
