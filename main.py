@@ -11,6 +11,7 @@ from zero_matrix.ZeroMatrixGame import ZeroMatrixGame as Game
 log = logging.getLogger(__name__)
 
 
+
 coloredlogs.install(level="INFO")  # Change this to DEBUG to see more info.
 
 if __name__ == "__main__":
@@ -23,10 +24,10 @@ if __name__ == "__main__":
     # Training parameters
     args = dotdict(
         {
-            "numIters": 50,  # number of training iterations
-            "numEps": 50,  # number of self-play games per iteration
+            "numIters": 1000,  # number of training iterations
+            "numEps": 100,  # number of self-play games per iteration
             "maxlenOfQueue": 200000,  # memory size
-            "numMCTSSims": 100,  # number of MCTS simulations per move
+            "numMCTSSims": 400,  # number of MCTS simulations per move
             "cpuct": 1.0,
             "checkpoint": "./checkpoint/",
             "load_model": False,

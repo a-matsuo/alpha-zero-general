@@ -78,6 +78,7 @@ class ZeroMatrixLogic:
         # Increment turn count
         turn_count += 1
         next_board[self.N, 0] = turn_count
+        next_board[self.N, 1] = (1 << action)
 
         # レイヤーで使用されたアクションを記録。もしアクションが新たに使用された場合、ビットを立てる
         # そして、左右のビットをクリアする。
@@ -122,11 +123,11 @@ class ZeroMatrixLogic:
 
         # # used_actionsは使用済みアクションが立っているビットマスクとする
         # # 使用済みアクションはvalidsを0にする
-        # used_actions = board[self.N, 1]
-        # print(f"used_actions: {used_actions}")
-        # for i in range(self.get_action_size()):
-        #     if (used_actions & (1 << i)) != 0:
-        #         valids[i] = 0
+        used_actions = board[self.N, 1]
+
+        for i in range(self.get_action_size()):
+            if (used_actions & (1 << i)) != 0:
+                valids[i] = 0
 
         puzzle_board = board[: self.N, :]
 

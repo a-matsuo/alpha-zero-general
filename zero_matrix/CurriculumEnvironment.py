@@ -41,10 +41,13 @@ class CurriculumEnvironment:
 
         # 一定の条件でnum_onesを設定せずに自由にランダム生成してもよい
         # ここでは難易度が低いときはnum_onesを指定、ある程度上がってきたら指定しないなども可能。
-        # シンプルに常にnum_ones指定とする。
-        
+
         gen = InitialMatGenerator(N, seed=self.seed)
-        initial_mat = gen.generate(num_ones=desired_num_ones)
+        if progress < 0.5:
+            initial_mat = gen.generate(num_ones=desired_num_ones)
+        else:
+            initial_mat = gen.generate()
+
         return initial_mat
 
 

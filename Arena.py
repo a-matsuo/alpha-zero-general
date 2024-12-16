@@ -1,116 +1,89 @@
 import logging
-
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
-
 class Arena():
     """
-    An Arena class where any 2 agents can be pit against each other.
+    An Arena class where we test two different models/agents on a single-player game (puzzle).
+    We measure how often each model solves the puzzle successfully.
     """
 
     def __init__(self, player1, player2, game, display=None):
         """
-        Input:
-            player 1,2: two functions that takes board as input, return action
-            game: Game object
-            display: a function that takes board as input and prints it (e.g.
-                     display in othello/OthelloGame). Is necessary for verbose
-                     mode.
-
-        see othello/OthelloPlayers.py for an example. See pit.py for pitting
-        human players/other baselines with each other.
+        player1, player2: functions that take a board (canonical form) and return an action.
+                          These represent two different models or agents trying to solve the puzzle.
+        game: Game object (single-player puzzle)
+        display: a function to display the board (for debugging/verbose)
         """
         self.player1 = player1
         self.player2 = player2
         self.game = game
         self.display = display
 
-    def playGame(self, verbose=False):
+    def playGame(self, player, verbose=False):
         """
-        Executes one episode of a game.
-
+        Run one game attempt using the given player (model).
         Returns:
-            either
-                winner: player who won the game (1 if player1, -1 if player2)
-            or
-                draw result returned from the game that is neither 1, -1, nor 0.
+          1  if the player solved the puzzle (game ended with success)
+          -1 if the player failed to solve within constraints (game ended in failure)
         """
-        players = [self.player2, None, self.player1]
-        curPlayer = 1
         board = self.game.getInitBoard()
-        it = 0
 
-        for player in players[0], players[2]:
-            if hasattr(player, "startGame"):
-                player.startGame()
-
-        while self.game.getGameEnded(board, curPlayer) == 0:
-            it += 1
-            if verbose:
-                assert self.display
-                print("Turn ", str(it), "Player ", str(curPlayer))
+        while self.game.getGameEnded(board, 1) == 0:  # player=1 is a dummy; single-player view
+            if verbose and self.display is not None:
                 self.display(board)
-            action = players[curPlayer + 1](self.game.getCanonicalForm(board, curPlayer))
 
-            valids = self.game.getValidMoves(self.game.getCanonicalForm(board, curPlayer), 1)
+            # player gives the action
+            action = player(self.game.getCanonicalForm(board, 1))
+            valids = self.game.getValidMoves(self.game.getCanonicalForm(board, 1), 1)
 
             if valids[action] == 0:
                 log.error(f'Action {action} is not valid!')
                 log.debug(f'valids = {valids}')
                 assert valids[action] > 0
 
-            # Notifying the opponent for the move
-            opponent = players[-curPlayer + 1]
-            if hasattr(opponent, "notify"):
-                opponent.notify(board, action)
+            board, _ = self.game.getNextState(board, 1, action)
 
-            board, curPlayer = self.game.getNextState(board, curPlayer, action)
-
-        for player in players[0], players[2]:
-            if hasattr(player, "endGame"):
-                player.endGame()
-
-        if verbose:
-            assert self.display
-            print("Game over: Turn ", str(it), "Result ", str(self.game.getGameEnded(board, 1)))
-            self.display(board)
-        return curPlayer * self.game.getGameEnded(board, curPlayer)
+        # Game ended, return the result from the perspective of player=1
+        return self.game.getGameEnded(board, 1)
 
     def playGames(self, num, verbose=False):
         """
-        Plays num games in which player1 starts num/2 games and player2 starts
-        num/2 games.
+        Tests each model on the puzzle `num` times.
 
         Returns:
-            oneWon: games won by player1
-            twoWon: games won by player2
-            draws:  games won by nobody
+          oneWon: number of successful solves by player1
+          twoWon: number of successful solves by player2
+          draws:  number of attempts that ended in a state that is not success or fail
+                  (If your game does not have a draw state, this will remain 0)
         """
-
-        num = int(num / 2)
         oneWon = 0
         twoWon = 0
         draws = 0
-        for _ in tqdm(range(num), desc="Arena.playGames (1)"):
-            gameResult = self.playGame(verbose=verbose)
-            if gameResult == 1:
+
+        # Test player1
+        for _ in tqdm(range(num), desc="Arena.playGames Player1"):
+            result = self.playGame(self.player1, verbose=verbose)
+            if result == 1:
                 oneWon += 1
-            elif gameResult == -1:
-                twoWon += 1
+            elif result == -1:
+                # failed
+                pass
             else:
+                # handle draw or other outcomes if exist
                 draws += 1
 
-        self.player1, self.player2 = self.player2, self.player1
-
-        for _ in tqdm(range(num), desc="Arena.playGames (2)"):
-            gameResult = self.playGame(verbose=verbose)
-            if gameResult == -1:
-                oneWon += 1
-            elif gameResult == 1:
+        # Test player2
+        for _ in tqdm(range(num), desc="Arena.playGames Player2"):
+            result = self.playGame(self.player2, verbose=verbose)
+            if result == 1:
                 twoWon += 1
+            elif result == -1:
+                # failed
+                pass
             else:
+                # handle draw or other outcomes if exist
                 draws += 1
 
         return oneWon, twoWon, draws
