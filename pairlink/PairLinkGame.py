@@ -12,7 +12,7 @@ class PairLinkGame(Game):
     target_pairsを省略すればランダムでペアを選ぶ。
     """
 
-    def __init__(self, N, target_pairs=None):
+    def __init__(self, N):
         """
         N: カード枚数
         target_pairs: 指定なければランダム
@@ -21,17 +21,15 @@ class PairLinkGame(Game):
         self.n = N
         self.max_card_id = N
         self.max_steps = (N - 2)*N // 2
-        self.target_pairs = target_pairs
 
-    def getInitBoard(self):
+    def getInitBoard(self, target_pairs=None):
         """
         初期状態のboardを返す
         shape: (n+1,)  board[0:n]=cards, board[n]=steps=0
         """
-        self.reset_target_pairs()
-        b = Board(self.N, self.target_pairs)
-        # 初回生成でtarget_pairsが決まる（ランダムの場合）
-        self.target_pairs = b.target_pairs
+        b = Board(self.N)
+        b.set_target_pairs(target_pairs)
+
         return b.get_state_array()
 
     def getBoardSize(self):
@@ -46,7 +44,7 @@ class PairLinkGame(Game):
         board上でplayerがactionを行った次の状態を返す
         常に新規Boardを生成
         """
-        b = Board(self.N, self.target_pairs)
+        b = Board(self.N)
         b.set_state_from_array(board)
         b.execute_move(action)
         return (b.get_state_array(), player)
@@ -69,7 +67,7 @@ class PairLinkGame(Game):
         """
         終了判定
         """
-        b = Board(self.N, self.target_pairs)
+        b = Board(self.N)
         b.set_state_from_array(board)
         if b.is_terminal():
             return b.get_result()
@@ -108,13 +106,13 @@ class PairLinkGame(Game):
 
     def getFeatureSize(self):
         # featureサイズを求めるため、一時的にBoardを生成
-        b = Board(self.N, self.target_pairs)
+        b = Board(self.N)
         f = b.get_features()
         return f.shape[0]
 
     def get_features(self, board):
         # featuresを得るために新たにBoardを生成
-        b = Board(self.N, self.target_pairs)
+        b = Board(self.N)
         b.set_state_from_array(board)
         return b.get_features()
 

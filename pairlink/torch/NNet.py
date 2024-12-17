@@ -1,3 +1,5 @@
+
+# NNet.py (NNetWrapper)
 import os
 import sys
 import time
@@ -7,25 +9,10 @@ from tqdm import tqdm
 sys.path.append('../../')
 from utils import *
 from NeuralNet import NeuralNet
-
 import torch
 import torch.optim as optim
 
 from .PairLinkNNet import PairLinkNNet as plnnet
-
-"""
-PairLink用のNNetラッパークラス。
-OthelloのNNet.py (NNetWrapper)を参考に、PairLinkの特徴量形式に合わせる。
-
-examples: (board, pi, v)
-boardはPairLinkGameのboard状態(np.array)
-get_featuresで(L*C + P_max*(1+2*C))次元ベクトルへ変換してからNN入力へ。
-
-train: 
-  複数エポック、バッチごとにサンプルを取り出し、NN学習を行う。
-predict:
-  boardからfeaturesを生成してNNで予測(pi,v)を返す。
-"""
 
 args = dotdict({
     'lr': 0.001,
@@ -33,9 +20,8 @@ args = dotdict({
     'epochs': 10,
     'batch_size': 64,
     'cuda': torch.cuda.is_available(),
-    'num_channels': 512,  # MLPの隠れユニット数として利用
+    'num_channels': 512,
 })
-
 
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
@@ -47,12 +33,6 @@ class NNetWrapper(NeuralNet):
             self.nnet.cuda()
 
     def train(self, examples):
-        """
-        examples: list of (board, pi, v)
-          board: state array (from game.getInitBoard or nextState)
-          pi: policy target
-          v: value target
-        """
         optimizer = optim.Adam(self.nnet.parameters(), lr=args.lr)
 
         for epoch in range(args.epochs):
@@ -68,10 +48,10 @@ class NNetWrapper(NeuralNet):
                 sample_ids = np.random.randint(len(examples), size=args.batch_size)
                 boards, target_pis, target_vs = list(zip(*[examples[i] for i in sample_ids]))
 
-                # boardsからfeatures生成
                 features = []
                 for b_state in boards:
-                    f = self.game.get_features(b_state)  # (L*C + P_max*(1+2*C))次元ベクトル
+                    # game.get_features()が拡張された特徴量（achieved_any_flag含む）を返す
+                    f = self.game.get_features(b_state)
                     features.append(f)
                 features = np.array(features, dtype=np.float32)
 
@@ -87,7 +67,6 @@ class NNetWrapper(NeuralNet):
                     target_pis = target_pis.contiguous().cuda()
                     target_vs = target_vs.contiguous().cuda()
 
-                # 推論
                 out_pi, out_v = self.nnet(features)
                 l_pi = self.loss_pi(target_pis, out_pi)
                 l_v = self.loss_v(target_vs, out_v)
@@ -97,16 +76,11 @@ class NNetWrapper(NeuralNet):
                 v_losses.update(l_v.item(), features.size(0))
                 t.set_postfix(Loss_pi=pi_losses, Loss_v=v_losses)
 
-                # 最適化
                 optimizer.zero_grad()
                 total_loss.backward()
                 optimizer.step()
 
     def predict(self, board):
-        """
-        board: np.array board state
-        """
-        # boardからfeaturesを生成
         features = self.game.get_features(board)
         features = torch.FloatTensor(features.astype(np.float32))
         if args.cuda:
@@ -120,7 +94,6 @@ class NNetWrapper(NeuralNet):
         return torch.exp(pi).data.cpu().numpy()[0], v.data.cpu().numpy()[0]
 
     def loss_pi(self, targets, outputs):
-        # 交差エントロピー（policyターゲットはone-hot）
         return -torch.sum(targets * outputs) / targets.size(0)
 
     def loss_v(self, targets, outputs):

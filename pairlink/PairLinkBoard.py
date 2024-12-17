@@ -3,15 +3,6 @@ import random
 
 class PairLinkBoard():
     def __init__(self, N, target_pairs=None):
-        """
-        N: カード枚数
-        target_pairs: [(a,b), (c,d), ...] 必要なペア (a<b推奨)
-                      None の場合はランダム生成
-
-        initial_cards: [1..N]
-        max_steps: (N - 2)*N/2
-        max_card_id = N
-        """
         self.n = N
         self.initial_cards = list(range(1, N+1))
         self.max_card_id = N
@@ -22,21 +13,18 @@ class PairLinkBoard():
         self.P_max = len(self.all_pairs_list)
 
         if target_pairs is None:
-            # ランダムにペアを選択
             num_pairs = random.randint(1, self.P_max)
             selected_pairs = random.sample(self.all_pairs_list, num_pairs)
             self.target_pairs = selected_pairs
         else:
             self.target_pairs = target_pairs[:]
 
-        # 現在の状態
         self.cards = self.initial_cards[:]
         self.steps = 0
 
-        # 一度でも隣接していたら達成済みとみなすためのセット
+        # 全てのペアに対して一度でも隣接したことがある場合に記録
         self.achieved_pairs = set()
 
-        # ペアカード特徴の事前計算
         self.pair_card_features = self._precompute_pair_card_features()
 
     def _generate_all_pairs(self):
@@ -48,41 +36,29 @@ class PairLinkBoard():
         return all_pairs
 
     def set_state_from_array(self, board_array):
-        # 前半: cards + steps
         self.cards = list(board_array[0:self.n])
         self.steps = int(board_array[self.n])
-
-        # 後半: targetフラグ + achievedフラグ
-        # targetフラグは board_array[n+1 : n+1+P_max]
-        # achievedフラグは board_array[n+1+P_max : n+1+2*P_max]
 
         target_flags = board_array[self.n+1 : self.n+1+self.P_max]
         achieved_flags = board_array[self.n+1+self.P_max : self.n+1+2*self.P_max]
 
-        # target_pairs復元
-        # target_flags[i] == 1 のペアを target_pairs に含める
-        # 0の場合は対象外
         new_target_pairs = []
         for i, (a,b) in enumerate(self.all_pairs_list):
             if target_flags[i] == 1:
                 new_target_pairs.append((a,b))
         self.target_pairs = new_target_pairs
 
-        # achieved_pairs復元
         new_achieved = set()
-        for i, (a,b) in enumerate(self.all_pairs_list):
+        for i,(a,b) in enumerate(self.all_pairs_list):
             if achieved_flags[i] == 1:
                 pa, pb = (a,b) if a<b else (b,a)
                 new_achieved.add((pa,pb))
         self.achieved_pairs = new_achieved
 
     def get_state_array(self):
-        # 現在の状態を array 化
-        # サイズ: n (cards) + 1 (steps) + P_max (target flags) + P_max (achieved flags)
         arr = np.array(self.cards + [self.steps], dtype=int)
 
         target_flags = np.zeros(self.P_max, dtype=int)
-        # target_pairsに含まれるペアがあれば1にする
         target_set = set()
         for (a,b) in self.target_pairs:
             pa, pb = (a,b) if a<b else (b,a)
@@ -98,7 +74,6 @@ class PairLinkBoard():
             if (pa,pb) in self.achieved_pairs:
                 achieved_flags[i] = 1
 
-        # 結合
         full_arr = np.concatenate([arr, target_flags, achieved_flags])
         return full_arr
 
@@ -107,28 +82,22 @@ class PairLinkBoard():
             raise ValueError("Invalid action.")
         self.cards[action], self.cards[action+1] = self.cards[action+1], self.cards[action]
         self.steps += 1
-
         self._update_achieved_pairs()
 
     def _update_achieved_pairs(self):
-        # 現在隣接しているターゲットペアをachieved_pairsに追加
-        target_set = set()
-        for (a,b) in self.target_pairs:
+        # 現在隣接している全ペアをachieved_pairsに追加
+        for i in range(self.n - 1):
+            a = self.cards[i]
+            b = self.cards[i+1]
             pa, pb = (a,b) if a<b else (b,a)
-            target_set.add((pa,pb))
-
-        for (a, b) in self.target_pairs:
-            pa, pb = (a,b) if a<b else (b,a)
-            if (pa, pb) not in self.achieved_pairs:
-                if self._is_adjacent(a, b):
-                    self.achieved_pairs.add((pa, pb))
+            self.achieved_pairs.add((pa,pb))
 
     def is_goal_reached(self):
+        # ターゲットペアすべてがachieved_pairsに含まれているか
         target_set = set()
         for (a,b) in self.target_pairs:
             pa, pb = (a,b) if a<b else (b,a)
             target_set.add((pa,pb))
-        # 全target_pairsがachievedに含まれているか
         return target_set.issubset(self.achieved_pairs)
 
     def _is_adjacent(self, a, b):
@@ -175,53 +144,45 @@ class PairLinkBoard():
         return pair_card_feats
 
     def get_features(self):
-        # 特徴作成は従来通り
+        """
+        ここでachieved_pairsの情報もNN入力に反映する。
+        ペアごとに次を出力:
+        - target_unachieved_flag: ターゲットペアで未達成なら1、達成済or非ターゲットなら0
+        - achieved_any_flag: このペアが一度でも達成(隣接)されたことがあれば1、なければ0
+
+        shape: (2 + 2*C) per pair
+        """
         C = self.max_card_id
         card_vec = self.get_one_hot_cards()
 
+        # ターゲットペア判定用
         target_set = set()
-        for (a,b) in self.target_pairs:
+        for (a,b) in self.target_pairs or []:
             pa, pb = (a,b) if a<b else (b,a)
             target_set.add((pa,pb))
 
         pair_vecs = []
         for i, (a, b) in enumerate(self.all_pairs_list):
             pa, pb = (a,b) if a<b else (b,a)
-            achieved_flag = 0
-            if (pa, pb) in target_set:
-                if (pa, pb) in self.achieved_pairs:
-                    achieved_flag = 0  # 達成済みなので未達成フラグは0
-                else:
-                    achieved_flag = 1  # まだ達成していない
+
+            # target_unachieved_flag
+            # ターゲットペアかつachievedされていなければ1
+            target_unachieved_flag = 0
+            if (pa, pb) in target_set and (pa, pb) not in self.achieved_pairs:
+                target_unachieved_flag = 1
+
+            # achieved_any_flag
+            # 過去一度でも達成済みなら1
+            achieved_any_flag = 0
+            if (pa, pb) in self.achieved_pairs:
+                achieved_any_flag = 1
 
             pair_card_feat = self.pair_card_features[i]
-            pair_feat = np.concatenate([[achieved_flag], pair_card_feat])
+
+            # 新たに次元を拡張： [target_unachieved_flag, achieved_any_flag, ...pair_card_feat...]
+            pair_feat = np.concatenate([[target_unachieved_flag, achieved_any_flag], pair_card_feat])
             pair_vecs.append(pair_feat)
 
         pair_vec = np.concatenate(pair_vecs)
         features = np.concatenate([card_vec, pair_vec])
         return features
-
-# テスト例
-if __name__ == "__main__":
-    N = 5
-    b = PairLinkBoard(N)
-    print("Before any move:")
-    arr = b.get_state_array()
-    print("state_array shape:", arr.shape)
-    print(arr)
-
-    # 一手実行
-    b.execute_move(0)
-    arr2 = b.get_state_array()
-    print("After one move:")
-    print("state_array shape:", arr2.shape)
-    print(arr2)
-
-    # 新規Boardを作ってset_state_from_arrayで復元
-    b2 = PairLinkBoard(N)  # 新規インスタンス
-    b2.set_state_from_array(arr2)
-    arr3 = b2.get_state_array()
-    print("Copied board state_array:")
-    print(arr3)
-    print("Equal:", np.array_equal(arr2, arr3))

@@ -1,3 +1,4 @@
+# PairLinkNNet.py
 import sys
 sys.path.append('..')
 import torch
@@ -9,22 +10,21 @@ class PairLinkNNet(nn.Module):
     def __init__(self, game, args):
         super(PairLinkNNet, self).__init__()
         # ゲームパラメータ
-        self.input_size = game.getFeatureSize()  # (L*C + P_max*(1+2*C))
+        # getFeatureSize()はペアごとの特徴量が変更されても常に最新の次元数を返す
+        # 今回、各ペアあたり(2 + 2*C)次元に拡張され、achieved_any_flagが追加されたが、
+        # ここでは特別な変更は不要。
+        self.input_size = game.getFeatureSize()
         self.action_size = game.getActionSize()
         self.args = args
 
-        # MLP構造
-        hidden_size = args.num_channels  # ユーザが指定するチャネル数をFCのユニット数として利用
+        hidden_size = args.num_channels
         self.fc1 = nn.Linear(self.input_size, hidden_size)
         self.bn1 = nn.BatchNorm1d(hidden_size)
 
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.bn2 = nn.BatchNorm1d(hidden_size)
 
-        # ポリシーヘッド
         self.fc_policy = nn.Linear(hidden_size, self.action_size)
-
-        # バリューヘッド
         self.fc_value = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
