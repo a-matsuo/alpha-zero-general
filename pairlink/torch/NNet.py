@@ -95,7 +95,7 @@ class NNetWrapper(NeuralNet):
 
                 pi_losses.update(l_pi.item(), features.size(0))
                 v_losses.update(l_v.item(), features.size(0))
-                t.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
+                t.set_postfix(Loss_pi=pi_losses, Loss_v=v_losses)
 
                 # 最適化
                 optimizer.zero_grad()

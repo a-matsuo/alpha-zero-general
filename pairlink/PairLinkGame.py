@@ -3,38 +3,38 @@ import sys
 sys.path.append('..')
 from Game import Game
 import numpy as np
-from .PairLinkLogic import Board
+from .PairLinkBoard import PairLinkBoard as Board
 
 class PairLinkGame(Game):
     """
     PairLinkパズルのGameクラス
-    OthelloGameと類似のインターフェースで実装。
+    N と target_pairsを指定し、initial_cardsやmax_steps, max_card_idは内部で決定。
+    target_pairsを省略すればランダムでペアを選ぶ。
     """
 
-    def __init__(self, initial_cards, target_pairs, max_steps=20, max_card_id=None):
-        self.initial_cards = initial_cards
+    def __init__(self, N, target_pairs=None):
+        """
+        N: カード枚数
+        target_pairs: 指定なければランダム
+        """
+        self.N = N
+        self.n = N
+        self.max_card_id = N
+        self.max_steps = (N - 2)*N // 2
         self.target_pairs = target_pairs
-        self.max_steps = max_steps
-        self.n = len(initial_cards)
-
-        if max_card_id is None:
-            max_card_id = max(initial_cards)
-        self.max_card_id = max_card_id
 
     def getInitBoard(self):
         """
         初期状態のboardを返す
         shape: (n+1,)  board[0:n]=cards, board[n]=steps=0
         """
-        b = Board(self.initial_cards, self.target_pairs, self.max_steps, self.max_card_id)
+        self.reset_target_pairs()
+        b = Board(self.N, self.target_pairs)
+        # 初回生成でtarget_pairsが決まる（ランダムの場合）
+        self.target_pairs = b.target_pairs
         return b.get_state_array()
 
     def getBoardSize(self):
-        """
-        ボードサイズ
-        1次元だが、Gameクラスが2次元を想定していることが多いので、(n+1,1)などとする
-        ここでは(n+1,)で返しておく
-        """
         return (self.n+1,)
 
     def getActionSize(self):
@@ -43,10 +43,10 @@ class PairLinkGame(Game):
 
     def getNextState(self, board, player, action):
         """
-        board上でplayerがactionを行った次の状態
-        playerは1人ゲームなので変化なし
+        board上でplayerがactionを行った次の状態を返す
+        常に新規Boardを生成
         """
-        b = Board(self.initial_cards, self.target_pairs, self.max_steps, self.max_card_id)
+        b = Board(self.N, self.target_pairs)
         b.set_state_from_array(board)
         b.execute_move(action)
         return (b.get_state_array(), player)
@@ -54,41 +54,32 @@ class PairLinkGame(Game):
     def getValidMoves(self, board, player):
         """
         現在の状態で有効な手
-        全ての隣接swapが有効(終局でなければ)
+        今回は全ての隣接swapが基本有効 (終局でなければチェック可能だが省略）
         """
-        b = Board(self.initial_cards, self.target_pairs, self.max_steps, self.max_card_id)
-        b.set_state_from_array(board)
-        valids = [0]*self.getActionSize()
-        if not b.is_terminal():
-            for i in range(self.n - 1):
-                valids[i] = 1
+        # 終局チェックをして厳密に制御したい場合は以下のようにする
+        # b = Board(self.N, self.target_pairs)
+        # b.set_state_from_array(board)
+        # if b.is_terminal():
+        #     return np.zeros(self.getActionSize(), dtype=int)
+
+        valids = [1]*self.getActionSize()
         return np.array(valids)
 
     def getGameEnded(self, board, player):
         """
-        終了時の結果:
-        1: 成功
-        -1: 失敗
-        継続:0
+        終了判定
         """
-        b = Board(self.initial_cards, self.target_pairs, self.max_steps, self.max_card_id)
+        b = Board(self.N, self.target_pairs)
         b.set_state_from_array(board)
         if b.is_terminal():
             return b.get_result()
         return 0
 
     def getCanonicalForm(self, board, player):
-        """
-        プレイヤー1視点に正規化
-        1人ゲームではそのままでOK
-        """
+        # 1人ゲームなのでそのまま
         return board
 
     def getSymmetries(self, board, pi):
-        """
-        対称性拡張: カード列の反転
-        piも対応
-        """
         assert len(pi) == self.getActionSize()
         cards = board[0:self.n]
         steps = board[self.n]
@@ -116,21 +107,16 @@ class PairLinkGame(Game):
         print("Steps:", steps)
 
     def getFeatureSize(self):
-        """
-        特徴ベクトルの次元数: L*C + P
-        L = n (カード数)
-        C = max_card_id
-        P = len(target_pairs)
-        """
-        L = self.n
-        C = self.max_card_id
-        P = len(self.target_pairs)
-        return L*C + P
+        # featureサイズを求めるため、一時的にBoardを生成
+        b = Board(self.N, self.target_pairs)
+        f = b.get_features()
+        return f.shape[0]
 
     def get_features(self, board):
-        """
-        board(状態配列)から特徴ベクトルを生成
-        """
-        b = Board(self.initial_cards, self.target_pairs, self.max_steps, self.max_card_id)
+        # featuresを得るために新たにBoardを生成
+        b = Board(self.N, self.target_pairs)
         b.set_state_from_array(board)
         return b.get_features()
+
+    def reset_target_pairs(self):
+        self.target_pairs = None

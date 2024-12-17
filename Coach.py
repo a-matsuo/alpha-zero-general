@@ -64,6 +64,7 @@ class PairLinkCoach():
             r = self.game.getGameEnded(board, self.curPlayer)
 
             if r != 0:
+                print(f"Game ended with result: {r}")
                 # Game ended
                 # Assign values
                 return [(x[0], x[2], r * ((-1) ** (x[1] != self.curPlayer))) for x in trainExamples]
@@ -87,7 +88,7 @@ class PairLinkCoach():
 
                 self.trainExamplesHistory.append(iterationTrainExamples)
 
-            if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
+            if len(self.trainExamplesHistory) > self.args.maxlenOfQueue:
                 log.warning(f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = {len(self.trainExamplesHistory)}")
                 self.trainExamplesHistory.pop(0)
 
@@ -108,6 +109,18 @@ class PairLinkCoach():
             self.nnet.train(trainExamples)
             nmcts = MCTS(self.game, self.nnet, self.args)
 
+
+            # 新しい結果を保存するためのディレクトリ・ファイル名作成
+            # argsに記録されているパラメータを使って一意なディレクトリ名を作成
+            dirname = os.path.join(
+                self.args.checkpoint,
+                f"pairlink_qubits{self.args.num_qubits}_Eps{self.args.numEps}_MCTS{self.args.numMCTSSims}_lr{self.args.lr}_epochs{self.args.epochs}"
+            )
+            os.makedirs(dirname, exist_ok=True)
+
+            filename = f"pairlink_checkpoint_qubits{self.args.num_qubits}_iter{i}_Eps{self.args.numEps}_MCTS{self.args.numMCTSSims}_lr{self.args.lr}_epochs{self.args.epochs}.pth.tar"
+
+
             log.info('PITTING AGAINST PREVIOUS VERSION')
             arena = Arena(lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
                           lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), self.game)
@@ -119,7 +132,7 @@ class PairLinkCoach():
                 self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             else:
                 log.info('ACCEPTING NEW MODEL')
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
+                self.nnet.save_checkpoint(folder=dirname, filename=filename)
                 self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
 
     def getCheckpointFile(self, iteration):
